@@ -36,6 +36,12 @@ h1, h2, h3 {
     border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.08);
 }
+.stMetric label, .stMetric [data-testid="stMetricLabel"] {
+    color: #a0a0cc !important;
+}
+.stMetric [data-testid="stMetricValue"] {
+    color: #ffffff !important;
+}
 div[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
 }
