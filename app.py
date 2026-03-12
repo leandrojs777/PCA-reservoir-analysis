@@ -120,12 +120,14 @@ DATASETS = {
     "Capa (Formaciones)": {
         "df": capa_df,
         "label_col": "capa",
+        "hover_name_col": "capa",
         "numeric_cols": ["pv", "a", "wi", "wid", "oip", "mov_oip", "so", "np"],
         "description": "Propiedades agregadas por capa/formación del reservorio (8 capas).",
     },
     "Malla (Pares Inyector-Productor)": {
         "df": malla_df,
         "label_col": "capa",
+        "hover_name_col": "id_malla",
         "numeric_cols": ["so", "vp", "np", "np_mov", "wi", "wi_pv", "fr", "oip"],
         "description": "Datos por par inyector-productor a nivel de malla (353 registros).",
     },
@@ -179,8 +181,10 @@ if len(selected_cols) < 2:
 
 df = ds["df"].copy()
 label_col = ds["label_col"]
+hover_name_col = ds.get("hover_name_col", label_col)
 X = df[selected_cols].dropna()
 labels = df.loc[X.index, label_col]
+hover_names = df.loc[X.index, hover_name_col]
 
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
@@ -191,6 +195,12 @@ scores = pca.fit_transform(X_scaled)
 pc_cols = [f"PC{i+1}" for i in range(n_components)]
 scores_df = pd.DataFrame(scores, columns=pc_cols, index=X.index)
 scores_df[label_col] = labels.values
+scores_df[hover_name_col] = hover_names.values
+
+# Agregar variables originales a scores_df para mostrarlas en el hover
+for col in selected_cols:
+    if col not in scores_df.columns:
+        scores_df[col] = df.loc[X.index, col]
 
 loadings = pd.DataFrame(
     pca.components_.T,
@@ -332,9 +342,10 @@ with tab_scatter:
         x="PC1",
         y="PC2",
         color=label_col,
+        hover_name=hover_name_col,
         template=PLOTLY_TEMPLATE,
         color_discrete_sequence=PALETTE,
-        hover_data=scores_df.columns.tolist(),
+        hover_data=selected_cols,
     )
     fig_2d.update_traces(marker=dict(size=12, line=dict(width=1, color="#1a1a2e")))
     fig_2d.update_layout(
@@ -376,9 +387,10 @@ with tab_3d:
             y="PC2",
             z="PC3",
             color=label_col,
+            hover_name=hover_name_col,
             template=PLOTLY_TEMPLATE,
             color_discrete_sequence=PALETTE,
-            hover_data=scores_df.columns.tolist(),
+            hover_data=selected_cols,
         )
         fig_3d.update_traces(marker=dict(size=6, line=dict(width=0.5, color="#1a1a2e")))
         fig_3d.update_layout(
@@ -405,25 +417,17 @@ with tab_biplot:
         "Las **flechas** muestran la dirección y magnitud de cada variable original."
     )
 
-    fig_bi = go.Figure()
-
-    # Scores
-    unique_labels = scores_df[label_col].unique()
-    for i, lab in enumerate(unique_labels):
-        mask = scores_df[label_col] == lab
-        fig_bi.add_trace(
-            go.Scatter(
-                x=scores_df.loc[mask, "PC1"],
-                y=scores_df.loc[mask, "PC2"],
-                mode="markers",
-                name=str(lab),
-                marker=dict(
-                    size=10,
-                    color=PALETTE[i % len(PALETTE)],
-                    line=dict(width=1, color="#1a1a2e"),
-                ),
-            )
-        )
+    fig_bi = px.scatter(
+        scores_df,
+        x="PC1",
+        y="PC2",
+        color=label_col,
+        hover_name=hover_name_col,
+        template=PLOTLY_TEMPLATE,
+        color_discrete_sequence=PALETTE,
+        hover_data=selected_cols,
+    )
+    fig_bi.update_traces(marker=dict(size=10, line=dict(width=1, color="#1a1a2e")))
 
     # Loading vectors — scale to fit nicely
     max_score = max(
@@ -579,10 +583,11 @@ with tab_diag:
             x="PC1",
             y="PC2",
             color="cluster_id",
+            hover_name=hover_name_col,
             template=PLOTLY_TEMPLATE,
             color_discrete_sequence=["#FF6B6B", "#4ECDC4", "#FFD93D"],
             title="Diagnóstico IA: PC1 vs PC2 por Clúster",
-            hover_data=diag_df.columns.tolist()
+            hover_data=selected_cols
         )
         fig_diag.update_traces(marker=dict(size=10, line=dict(width=1, color="#1a1a2e")))
         fig_diag.update_layout(
