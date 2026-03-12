@@ -762,10 +762,10 @@ with tab_opt:
             worst_var, worst_val = impactos[0]
             best_var, best_val = impactos[-1]
             
-            if worst_val < 0:
-                st.warning(f"**🔍 Diagnóstico Automático**\n\nPara el pozo {sel_malla}, el factor que más está limitando el Factor de Recuperación es **{worst_var.upper()}**. Se recomienda una revisión técnica prioritaria de este parámetro.")
-            if best_val > 0:
-                st.success(f"Factor Crítico de Éxito: **{best_var.upper()}**.")
+            # Mostrar sugerencias siempre (formato incondicional para evitar que se oculten)
+            st.warning(f"**🔍 Diagnóstico Automático**\n\nPara el pozo **{sel_malla}**, el factor que más está limitando el Factor de Recuperación es **{worst_var.upper()}**. Se recomienda una revisión técnica prioritaria de este parámetro.")
+            
+            st.success(f"Factor Crítico de Éxito: **{best_var.upper()}**.")
             
             st.info(f"💡 **Ayuda de Análisis Clínico**: Las barras **Rojas** (derecha) indican variables de este pozo que aumentan el FR. Las barras **Azules** (izquierda), frenan la recuperación.")
             
