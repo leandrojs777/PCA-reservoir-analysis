@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import re
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -70,25 +72,61 @@ PLOTLY_TEMPLATE = "plotly_dark"
 def load_data():
     capa = pd.read_excel("data/Capa.xlsx")
     malla = pd.read_excel("data/Malla.xlsx")
-    # Clean column names (strip whitespace/newlines)
-    capa.columns = [c.strip().replace("\n", " ") for c in capa.columns]
-    malla.columns = [c.strip().replace("\n", " ") for c in malla.columns]
+    
+    # Skill de Normalización de columnas
+    def normalize_cols(columns):
+        norm_cols = []
+        for c in columns:
+            c = str(c).lower().strip()
+            c = c.replace(" ", "_")
+            c = re.sub(r'[^a-z0-9_]', '', c)
+            norm_cols.append(c)
+        return norm_cols
+
+    capa.columns = normalize_cols(capa.columns)
+    malla.columns = normalize_cols(malla.columns)
+    
     return capa, malla
 
 
 capa_df, malla_df = load_data()
 
+def compute_well_clusters(df):
+    """
+    Skill compute_well_clusters: Agrupa las mallas en 3 categorías de rendimiento.
+    """
+    # Variables de entrada para el modelo
+    features = ['so', 'vp', 'np', 'wi', 'oip']
+    
+    # Realiza una copia para no alterar el caché
+    result_df = df.copy()
+    
+    # Manejo de nulos (KMeans no permite NaNs)
+    X = result_df[features].fillna(0)
+    
+    # Estandarización de las variables
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    # Aplicar el algoritmo KMeans
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    result_df['cluster_id'] = kmeans.fit_predict(X_scaled)
+    
+    return result_df
+
+malla_df = compute_well_clusters(malla_df)
+
 DATASETS = {
     "Capa (Formaciones)": {
         "df": capa_df,
-        "label_col": "Capa",
-        "numeric_cols": ["PV", "A", "Wi", "Wid", "OIP", "Mov OIP", "So", "Np"],
+        "label_col": "capa",
+        "numeric_cols": ["pv", "a", "wi", "wid", "oip", "mov_oip", "so", "np"],
         "description": "Propiedades agregadas por capa/formación del reservorio (8 capas).",
     },
     "Malla (Pares Inyector-Productor)": {
         "df": malla_df,
         "label_col": "capa",
-        "numeric_cols": ["So", "Vp", "Np", "Np_MOV", "Wi", "Wi_PV", "FR", "OIP"],
+        "numeric_cols": ["so", "vp", "np", "np_mov", "wi", "wi_pv", "fr", "oip"],
         "description": "Datos por par inyector-productor a nivel de malla (353 registros).",
     },
 }
@@ -183,7 +221,7 @@ st.markdown("---")
 #  Tab Layout
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table = st.tabs([
+tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table, tab_diag = st.tabs([
     "📋 Datos",
     "📊 Scree Plot",
     "🔵 Scatter 2D",
@@ -191,6 +229,7 @@ tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table = s
     "🎯 Biplot",
     "🔥 Heatmap",
     "📑 Componentes",
+    "🤖 Diagnóstico IA",
 ])
 
 
@@ -519,3 +558,57 @@ with tab_table:
 
     st.markdown("### Scores (Datos Transformados)")
     st.dataframe(scores_df.round(4), use_container_width=True, height=400)
+
+
+# ── Tab: Diagnóstico IA ──────────────────────────────────────────────────────
+with tab_diag:
+    st.markdown("### 🤖 Diagnóstico IA — Clustering de Rendimiento")
+    
+    if "cluster_id" in df.columns:
+        st.markdown(
+            "Agrupación de mallas en **3 categorías** usando KMeans sobre las variables "
+            "`so`, `vp`, `np`, `wi` y `oip`. El gráfico muestra los datos proyectados en el espacio PCA."
+        )
+        
+        # Merge de cluster_id al dataframe de scores para poder graficarlo
+        diag_df = scores_df.copy()
+        diag_df["cluster_id"] = df.loc[diag_df.index, "cluster_id"].astype(str)
+        
+        fig_diag = px.scatter(
+            diag_df,
+            x="PC1",
+            y="PC2",
+            color="cluster_id",
+            template=PLOTLY_TEMPLATE,
+            color_discrete_sequence=["#FF6B6B", "#4ECDC4", "#FFD93D"],
+            title="Diagnóstico IA: PC1 vs PC2 por Clúster",
+            hover_data=diag_df.columns.tolist()
+        )
+        fig_diag.update_traces(marker=dict(size=10, line=dict(width=1, color="#1a1a2e")))
+        fig_diag.update_layout(
+            height=500,
+            xaxis_title="PC1",
+            yaxis_title="PC2",
+            margin=dict(l=40, r=40, t=40, b=40),
+            font=dict(family="Inter"),
+        )
+        
+        st.plotly_chart(fig_diag, use_container_width=True)
+        
+        st.markdown("### 📊 Eficiencia Promedio por Clúster")
+        st.markdown(
+            "Comparación del rendimiento promedio iterando métricas clave como `np` (producción) y `wi` (inyección)."
+        )
+        
+        # Agrupar y calcular promedios
+        cluster_summary = df.groupby("cluster_id")[["np", "wi"]].mean().reset_index()
+        cluster_summary.rename(columns={
+            "cluster_id": "Clúster",
+            "np": "Producción Promedio (np)",
+            "wi": "Inyección Promedio (wi)"
+        }, inplace=True)
+        
+        st.dataframe(cluster_summary.round(2), use_container_width=True, hide_index=True)
+        
+    else:
+        st.info("ℹ️ El diagnóstico IA solo está disponible para el dataset de 'Malla', el cual contiene la skill de Clustering.")
