@@ -5,6 +5,9 @@ import re
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score
+import shap
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -115,6 +118,30 @@ def compute_well_clusters(df):
     return result_df
 
 malla_df = compute_well_clusters(malla_df)
+
+@st.cache_resource
+def predict_and_explain_fr(df):
+    """
+    Skill predict_and_explain_fr: Predicts FR using So, Vp, Wi_PV, OIP and calculates SHAP values.
+    """
+    features = ['so', 'vp', 'wi_pv', 'oip']
+    target = 'fr'
+    
+    df_clean = df.dropna(subset=features + [target]).copy()
+    
+    X = df_clean[features]
+    y = df_clean[target]
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    
+    y_pred = model.predict(X)
+    r2 = r2_score(y, y_pred)
+    
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+    
+    return model, r2, explainer, shap_values, features, df_clean
 
 DATASETS = {
     "Capa (Formaciones)": {
@@ -231,7 +258,7 @@ st.markdown("---")
 #  Tab Layout
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table, tab_diag = st.tabs([
+tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table, tab_diag, tab_opt = st.tabs([
     "📋 Datos",
     "📊 Scree Plot",
     "🔵 Scatter 2D",
@@ -240,6 +267,7 @@ tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table, ta
     "🔥 Heatmap",
     "📑 Componentes",
     "🤖 Diagnóstico IA",
+    "🎯 Optimización de Mallas",
 ])
 
 
@@ -617,3 +645,67 @@ with tab_diag:
         
     else:
         st.info("ℹ️ El diagnóstico IA solo está disponible para el dataset de 'Malla', el cual contiene la skill de Clustering.")
+
+# ── Tab: Optimización de Mallas ──────────────────────────────────────────────
+with tab_opt:
+    st.markdown("### 🎯 Optimización de Mallas (XAI)")
+    
+    if dataset_name == "Malla (Pares Inyector-Productor)":
+        model, r2, explainer, shap_values, feat_cols, df_ml = predict_and_explain_fr(ds["df"])
+        
+        st.write(f"Modelo **RandomForestRegressor** entrenado para explicar el Factor de Recuperación (FR).")
+        st.write(f"**Precisión (Score $R^2$):** {r2:.4f}")
+        
+        if r2 > 0.7:
+            hover_col = ds.get("hover_name_col", label_col)
+            mallas_disp = df_ml[hover_col].unique()
+            
+            sel_malla = st.selectbox("Seleccionar Malla (Pozo) para explicar su FR:", mallas_disp)
+            
+            idx_array = np.where(df_ml[hover_col] == sel_malla)[0]
+            if len(idx_array) > 0:
+                idx = idx_array[0]
+                
+                base_val = explainer.expected_value
+                if isinstance(base_val, np.ndarray):
+                    base_val = base_val[0]
+                
+                malla_sv = shap_values[idx]
+                malla_real = df_ml['fr'].iloc[idx]
+                malla_pred = model.predict(df_ml[feat_cols].iloc[idx].values.reshape(1, -1))[0]
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Valor Base (Promedio)", f"{base_val:.3f}")
+                col2.metric("FR Predicho", f"{malla_pred:.3f}")
+                col3.metric("FR Real", f"{malla_real:.3f}", delta=f"{(malla_real - malla_pred):.3f} error", delta_color="inverse")
+                
+                # Ordenar por importancia absoluta
+                sorted_idx = np.argsort(np.abs(malla_sv))
+                
+                fig_shap = go.Figure()
+                bar_colors = ["#4ECDC4" if val > 0 else "#FF6B6B" for val in malla_sv[sorted_idx]]
+                
+                fig_shap.add_trace(go.Bar(
+                    y=[feat_cols[i] for i in sorted_idx],
+                    x=malla_sv[sorted_idx],
+                    orientation='h',
+                    marker_color=bar_colors,
+                    text=[f"{malla_sv[i]:.4f}" for i in sorted_idx],
+                    textposition="outside",
+                    hoverinfo="x+y"
+                ))
+                
+                fig_shap.update_layout(
+                    template=PLOTLY_TEMPLATE,
+                    title=f"Impacto SHAP de cada variable en {sel_malla}",
+                    xaxis_title="Impacto en FR (Unidades de FR)",
+                    yaxis_title="Varaible",
+                    height=400,
+                    margin=dict(l=40, r=40, t=40, b=40),
+                )
+                
+                st.plotly_chart(fig_shap, use_container_width=True)
+                st.info(f"💡 **Ayuda**: Las barras hacia la derecha (verde) indican variables que aumentaron el FR respecto al promedio. Las barras hacia la izquierda (rojo) disminuyeron el FR.")
+                
+    else:
+        st.info("ℹ️ La Optimización de Mallas solo está disponible para el dataset de 'Malla'.")
