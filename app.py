@@ -280,34 +280,36 @@ tab_guide, tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, ta
 # ── Tab: Guía y Metodología ──────────────────────────────────────────────────
 with tab_guide:
     st.markdown("### 📖 Guía y Metodología del Proyecto")
+    st.markdown("Esta aplicación forma parte del ecosistema de **Informes de Estado del Arte**. Integra metodologías de Inteligencia Artificial Explicable (XAI) para dotar de transparencia, educación y accionabilidad al análisis de factores de recuperación de petróleo.")
     st.markdown("---")
     
-    col1, col2 = st.columns(2)
-    with col1:
+    with st.expander("🔬 PCA (Análisis de Componentes Principales)", expanded=True):
         st.markdown("""
-        #### 🛢️ El Desafío de la Recuperación Secundaria
-        La producción de petróleo se nutre de datos estáticos y dinámicos que cambian con el tiempo (porosidades, volúmenes de inyección, barridos). 
-        Esta aplicación utiliza **Ciencia de Datos (Data Science)** y algoritmos de Machine Learning para sintetizar y visualizar patrones ocultos en campos maduros que, de otra forma, serían invisibles con gráficas tradicionales de Excel.
-
-        #### 🔬 Principal Component Analysis (PCA)
-        **¿Qué hace?** Reduce la complejidad. Si tenemos 10 variables productivas ($n$ dimensiones interactuando entre sí), el modelo crea "Componentes Principales" o ejes sintéticos que aglutinan las relaciones ocultas de estas 10 variables reales.
-        - **Scree Plot**: Indica qué porcentaje de la historia real logramos contar con cada componente nuevo.
-        - **Biplot**: Muestra visualmente qué peso o *influencia* originaria ejerce, digamos, el *OIP* respecto a mover la *producción de inyección*.
+        Reducción de 8 variables a componentes principales para ver la variabilidad del reservorio.
         """)
-    with col2:
+
+    with st.expander("🤖 Clustering"):
         st.markdown("""
-        #### 🤖 Diagnóstico por Clustering (KMeans)
-        No todos los pozos y mallas rinden igual. Al aplicar un modelo de **K-Means Clustering** en 3 grupos (segmentos), la inteligencia artificial explora las métricas de rendimiento ($V_p$, $S_o$, $W_i$) de forma ciega y encuentra afinidad o _familias de mallas_. 
-        - Podrás visualizar en colores si ciertas franjas de pozos requieren estimulación frente a los campeones del campo.
-
-        #### 🎯 Inteligencia Artificial Explicable (SHAP)
-        Los modelos como *Random Forest* predicen bien, pero actúan como "cajas negras" impenetrables. Usando **Explicaciones Aditivas de Shapley (SHAP)**, destripamos a la IA.
-        - **El Gráfico de Barras**: Te mostrará por qué una malla en particular predijo ese Factor de Recuperación ($FR$) en específico:
-            - 🟩 **Derecha (+)**: Las variables *empujaron* a la malla a tener más petróleo recuperado frente al promedio.
-            - 🟥 **Izquierda (-)**: Las variables *frenaron* severamente a la malla de producir lo que la media sugiere.
+        Agrupamiento de las 353 mallas por similitud operativa.
         """)
-        
-    st.info("💡 Usa la barra lateral (Sidebar) izquierda para elegir el conjunto de datos y comenzar a parametrizar tus modelos en tiempo real.")
+
+    with st.expander("🎯 SHAP"):
+        st.markdown("""
+        Explicación de qué variables físicas aumentan (rojo) o frenan (azul) el Factor de Recuperación (FR).
+        """)
+
+    st.markdown("### 📚 Glosario de Variables Clave")
+    st.markdown("""
+    A continuación, el diccionario de variables analizadas por el ensamble de Machine Learning:
+    
+    | Variable | Significado Técnico | Descripción Funcional |
+    |---|---|---|
+    | **`So`** | Saturación de Petróleo | Fracción del volumen poroso ocupado por petróleo remanente. |
+    | **`Vp`** | Volumen Poral | Capacidad total de almacenamiento de fluidos de la roca en la malla analizada. |
+    | **`Wi_PV`** | Agua Inyectada / Vol. Poral | Relación entre el volumen inyectado (Wi) normalizado por el tamaño del poro del reservorio. |
+    | **`OIP`** | Petróleo Original In Situ | Estimación inicial de los barriles originales de petróleo atrapados en sitio (Original Oil In Place). |
+    | **`FR`** | Factor de Recuperación | (Variable Objetivo). El porcentaje real del hidrocarburo original que se ha logrado bombear hacia superficie. |
+    """)
 
 
 # ── Tab: Raw Data ────────────────────────────────────────────────────────────
@@ -701,7 +703,11 @@ with tab_opt:
         hover_col = ds.get("hover_name_col", label_col)
         mallas_disp = df_ml[hover_col].unique()
         
-        sel_malla = st.selectbox("Seleccionar Malla (Pozo) para explicar su FR:", mallas_disp)
+        sel_malla = st.selectbox(
+            "Seleccionar Malla (Pozo) para explicar su FR:", 
+            mallas_disp,
+            help="Este modelo utiliza Random Forest para predecir el éxito operativo basado en datos históricos de inyección."
+        )
         
         idx_array = np.where(df_ml[hover_col] == sel_malla)[0]
         if len(idx_array) > 0:
@@ -724,8 +730,10 @@ with tab_opt:
             sorted_idx = np.argsort(np.abs(malla_sv))
                 
             fig_shap = go.Figure()
-            bar_colors = ["#4ECDC4" if val > 0 else "#FF6B6B" for val in malla_sv[sorted_idx]]
+            # Variables positivas en rojo (mejoran FR), negativas en azul (reducen FR)
+            bar_colors = ["#FF3131" if val > 0 else "#0000FF" for val in malla_sv[sorted_idx]]
             
+
             fig_shap.add_trace(go.Bar(
                 y=[feat_cols[i] for i in sorted_idx],
                 x=malla_sv[sorted_idx],
@@ -746,7 +754,20 @@ with tab_opt:
             )
             
             st.plotly_chart(fig_shap, use_container_width=True)
-            st.info(f"💡 **Ayuda**: Las barras hacia la derecha (verde) indican variables que aumentaron el FR respecto al promedio. Las barras hacia la izquierda (rojo) disminuyeron el FR.")
+            
+            # --- Lógica Prescriptiva ---
+            impactos = [(feat_cols[i], malla_sv[i]) for i in range(len(feat_cols))]
+            impactos.sort(key=lambda x: x[1])  # de menor a mayor
+            
+            worst_var, worst_val = impactos[0]
+            best_var, best_val = impactos[-1]
+            
+            if worst_val < 0:
+                st.info(f"Sugerencia: Revisar y optimizar **{worst_var.capitalize()}** para mejorar la recuperación.")
+            if best_val > 0:
+                st.success(f"Factor Crítico de Éxito: **{best_var.capitalize()}**.")
+            
+            st.info(f"💡 **Ayuda de Análisis Clínico**: Las barras **Rojas** (derecha) indican variables de este pozo que aumentan el FR. Las barras **Azules** (izquierda), frenan la recuperación.")
             
     else:
         st.info("ℹ️ La Optimización de Mallas solo está disponible para el dataset de 'Malla'.")
