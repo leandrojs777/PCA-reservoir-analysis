@@ -446,7 +446,7 @@ with tab_biplot:
                 x=[0, lx],
                 y=[0, ly],
                 mode="lines",
-                line=dict(color="#FFD93D", width=2.5),
+                line=dict(color="#FF3131", width=2.5),
                 showlegend=False,
                 hoverinfo="skip",
             )
@@ -465,14 +465,14 @@ with tab_biplot:
             arrowhead=3,
             arrowsize=1.5,
             arrowwidth=2,
-            arrowcolor="#FFD93D",
+            arrowcolor="#FF3131",
         )
         fig_bi.add_annotation(
             x=lx * 1.12,
             y=ly * 1.12,
             text=f"<b>{var}</b>",
             showarrow=False,
-            font=dict(size=11, color="#FFD93D"),
+            font=dict(size=11, color="#FF3131"),
         )
 
     fig_bi.update_layout(
