@@ -283,20 +283,14 @@ with tab_guide:
     st.markdown("Esta aplicación forma parte del ecosistema de **Informes de Estado del Arte**. Integra metodologías de Inteligencia Artificial Explicable (XAI) para dotar de transparencia, educación y accionabilidad al análisis de factores de recuperación de petróleo.")
     st.markdown("---")
     
-    with st.expander("🔬 PCA (Análisis de Componentes Principales)", expanded=True):
-        st.markdown("""
-        Reducción de 8 variables a componentes principales para ver la variabilidad del reservorio.
-        """)
+    st.markdown("#### 🔬 PCA (Análisis de Componentes Principales)")
+    st.markdown("> Reducción de 8 variables a componentes principales para ver la variabilidad del reservorio.")
 
-    with st.expander("🤖 Clustering"):
-        st.markdown("""
-        Agrupamiento de las 353 mallas por similitud operativa.
-        """)
+    st.markdown("#### 🤖 Clustering")
+    st.markdown("> Agrupamiento de las 353 mallas por similitud operativa.")
 
-    with st.expander("🎯 SHAP"):
-        st.markdown("""
-        Explicación de qué variables físicas aumentan (rojo) o frenan (azul) el Factor de Recuperación (FR).
-        """)
+    st.markdown("#### 🎯 SHAP")
+    st.markdown("> Explicación de qué variables físicas aumentan (verde) o frenan (rojo) el Factor de Recuperación (FR).")
 
     st.markdown("### 📚 Glosario de Variables Clave")
     st.markdown("""
@@ -729,11 +723,20 @@ with tab_opt:
             # Ordenar por importancia absoluta
             sorted_idx = np.argsort(np.abs(malla_sv))
                 
-            fig_shap = go.Figure()
-            # Variables positivas en rojo (mejoran FR), negativas en azul (reducen FR)
-            bar_colors = ["#FF3131" if val > 0 else "#0000FF" for val in malla_sv[sorted_idx]]
-            
+            # Diccionario de interpretaciones dinámico para más contexto
+            interpretaciones = {
+                "so": "La Saturación de Petróleo (So) alta indica que todavía hay una reserva significativa recuperable en esta malla. Es un buen candidato para optimizar la inyección.",
+                "vp": "El Volumen Poral (Vp) define el tamaño del 'tanque' de la roca. Un Vp limitante sugiere que el par inyector-productor drena una zona muy pequeña.",
+                "wi_pv": "La relación de Inyección por Volumen Poral (Wi_PV) es vital. Si es limitante (rojo), indica que se está inyectando poca agua relativa al tamaño de la malla, afectando el barrido.",
+                "oip": "El Petróleo Original In Situ (OIP) marca el potencial total. Un OIP bajo desde el inicio limita naturalmente el factor de recuperación final.",
+                "wi": "El volumen bruto de inyección (Wi) está impactando el rendimiento. Revisar la presión y caudales de la bomba en este inyector.",
+                "np": "La producción acumulada (Np) dicta el ritmo de vaciamiento histórico."
+            }
 
+            fig_shap = go.Figure()
+            # Variables positivas en verde (mejoran FR), negativas en rojo (reducen FR)
+            bar_colors = ["#00C851" if val > 0 else "#ff4444" for val in malla_sv[sorted_idx]]
+            
             fig_shap.add_trace(go.Bar(
                 y=[feat_cols[i] for i in sorted_idx],
                 x=malla_sv[sorted_idx],
@@ -748,7 +751,7 @@ with tab_opt:
                 template=PLOTLY_TEMPLATE,
                 title=f"Impacto SHAP de cada variable en {sel_malla}",
                 xaxis_title="Impacto en FR (Unidades de FR)",
-                yaxis_title="Varaible",
+                yaxis_title="Variable",
                 height=400,
                 margin=dict(l=40, r=40, t=40, b=40),
             )
@@ -761,13 +764,15 @@ with tab_opt:
             
             worst_var, worst_val = impactos[0]
             best_var, best_val = impactos[-1]
+            worst_desc = interpretaciones.get(worst_var.lower(), "")
+            best_desc = interpretaciones.get(best_var.lower(), "")
             
-            # Mostrar sugerencias siempre (formato incondicional para evitar que se oculten)
-            st.warning(f"**🔍 Diagnóstico Automático**\n\nPara el pozo **{sel_malla}**, el factor que más está limitando el Factor de Recuperación es **{worst_var.upper()}**. Se recomienda una revisión técnica prioritaria de este parámetro.")
+            # Mostrar sugerencias explicativas ampliadas
+            st.warning(f"**🔍 Diagnóstico Automático (Cuello de Botella)**\n\nPara el pozo **{sel_malla}**, el factor que más está limitando actualmente el Factor de Recuperación es **{worst_var.upper()}**.\n\n*Apreciación Técnica:* {worst_desc}\n\n**Recomendación:** Se sugiere una revisión prioritaria de este parámetro por parte de ingeniería de reservorios para destrabar el potencial de la malla.")
             
-            st.success(f"Factor Crítico de Éxito: **{best_var.upper()}**.")
+            st.success(f"**🌟 Factor Crítico de Éxito (Principal Motor)**\n\nLa variable que más está impulsando positivamente la recuperación en este pozo es **{best_var.upper()}**.\n\n*Apreciación Técnica:* {best_desc}")
             
-            st.info(f"💡 **Ayuda de Análisis Clínico**: Las barras **Rojas** (derecha) indican variables de este pozo que aumentan el FR. Las barras **Azules** (izquierda), frenan la recuperación.")
+            st.info(f"💡 **Guía de Lectura del Gráfico SHAP**: Las barras **Verdes** apuntando a la derecha cuantifican cuánto contribuye positivamente cada variable a incrementar el FR de este pozo respecto al promedio del yacimiento. Las barras **Rojas** apuntando a la izquierda representan la penalidad o el freno que esa misma variable le está imponiendo al FR.")
             
     else:
         st.info("ℹ️ La Optimización de Mallas solo está disponible para el dataset de 'Malla'.")
