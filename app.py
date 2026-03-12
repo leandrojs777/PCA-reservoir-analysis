@@ -169,7 +169,11 @@ with st.sidebar:
     st.markdown("# 🔬 PCA Config")
     st.markdown("---")
 
-    dataset_name = st.selectbox("📂 Dataset", list(DATASETS.keys()))
+    dataset_name = st.selectbox(
+        "📂 Dataset", 
+        list(DATASETS.keys()),
+        help="Elige el nivel de agregación de los datos. Malla contiene información detallada por par inyector-productor, y Capa agrupa propiedades a nivel formacional."
+    )
     ds = DATASETS[dataset_name]
 
     st.markdown(f"*{ds['description']}*")
@@ -180,6 +184,7 @@ with st.sidebar:
         "Seleccionar variables para PCA",
         options=ds["numeric_cols"],
         default=ds["numeric_cols"],
+        help="Las variables numéricas a reducir dimensionalmente. Por defecto, todas las métricas de volumen, producción e inyección están seleccionadas."
     )
 
     max_components = min(len(selected_cols), len(ds["df"])) if selected_cols else 2
@@ -188,6 +193,7 @@ with st.sidebar:
         min_value=2,
         max_value=max(max_components, 2),
         value=min(max_components, 3),
+        help="Los 'ejes sintéticos' que resumirán la varianza de los datos reales. Generalmente 2 o 3 componentes agrupan el >70% de la información (Varianza)."
     )
 
     st.markdown("---")
@@ -258,7 +264,8 @@ st.markdown("---")
 #  Tab Layout
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table, tab_diag, tab_opt = st.tabs([
+tab_guide, tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table, tab_diag, tab_opt = st.tabs([
+    "📖 Guía y Metodología",
     "📋 Datos",
     "📊 Scree Plot",
     "🔵 Scatter 2D",
@@ -269,6 +276,38 @@ tab_data, tab_scree, tab_scatter, tab_3d, tab_biplot, tab_heatmap, tab_table, ta
     "🤖 Diagnóstico IA",
     "🎯 Optimización de Mallas",
 ])
+
+# ── Tab: Guía y Metodología ──────────────────────────────────────────────────
+with tab_guide:
+    st.markdown("### 📖 Guía y Metodología del Proyecto")
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        #### 🛢️ El Desafío de la Recuperación Secundaria
+        La producción de petróleo se nutre de datos estáticos y dinámicos que cambian con el tiempo (porosidades, volúmenes de inyección, barridos). 
+        Esta aplicación utiliza **Ciencia de Datos (Data Science)** y algoritmos de Machine Learning para sintetizar y visualizar patrones ocultos en campos maduros que, de otra forma, serían invisibles con gráficas tradicionales de Excel.
+
+        #### 🔬 Principal Component Analysis (PCA)
+        **¿Qué hace?** Reduce la complejidad. Si tenemos 10 variables productivas ($n$ dimensiones interactuando entre sí), el modelo crea "Componentes Principales" o ejes sintéticos que aglutinan las relaciones ocultas de estas 10 variables reales.
+        - **Scree Plot**: Indica qué porcentaje de la historia real logramos contar con cada componente nuevo.
+        - **Biplot**: Muestra visualmente qué peso o *influencia* originaria ejerce, digamos, el *OIP* respecto a mover la *producción de inyección*.
+        """)
+    with col2:
+        st.markdown("""
+        #### 🤖 Diagnóstico por Clustering (KMeans)
+        No todos los pozos y mallas rinden igual. Al aplicar un modelo de **K-Means Clustering** en 3 grupos (segmentos), la inteligencia artificial explora las métricas de rendimiento ($V_p$, $S_o$, $W_i$) de forma ciega y encuentra afinidad o _familias de mallas_. 
+        - Podrás visualizar en colores si ciertas franjas de pozos requieren estimulación frente a los campeones del campo.
+
+        #### 🎯 Inteligencia Artificial Explicable (SHAP)
+        Los modelos como *Random Forest* predicen bien, pero actúan como "cajas negras" impenetrables. Usando **Explicaciones Aditivas de Shapley (SHAP)**, destripamos a la IA.
+        - **El Gráfico de Barras**: Te mostrará por qué una malla en particular predijo ese Factor de Recuperación ($FR$) en específico:
+            - 🟩 **Derecha (+)**: Las variables *empujaron* a la malla a tener más petróleo recuperado frente al promedio.
+            - 🟥 **Izquierda (-)**: Las variables *frenaron* severamente a la malla de producir lo que la media sugiere.
+        """)
+        
+    st.info("💡 Usa la barra lateral (Sidebar) izquierda para elegir el conjunto de datos y comenzar a parametrizar tus modelos en tiempo real.")
 
 
 # ── Tab: Raw Data ────────────────────────────────────────────────────────────
