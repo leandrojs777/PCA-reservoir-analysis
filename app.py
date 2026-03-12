@@ -656,56 +656,58 @@ with tab_opt:
         st.write(f"Modelo **RandomForestRegressor** entrenado para explicar el Factor de Recuperación (FR).")
         st.write(f"**Precisión (Score $R^2$):** {r2:.4f}")
         
-        if r2 > 0.7:
-            hover_col = ds.get("hover_name_col", label_col)
-            mallas_disp = df_ml[hover_col].unique()
+        if r2 < 0.7:
+            st.warning(f"⚠️ **Nota sobre la Precisión:** El Score $R^2$ de este modelo es de {r2:.2f}, lo que está por debajo del umbral óptimo de 0.70. Esto indica que las variables actuales (`so`, `vp`, `wi_pv`, `oip`) no explican exhaustivamente la variabilidad del Factor de Recuperación en este conjunto de datos, probablemente debido a dinámicas complejas del reservorio no capturadas. **Las explicaciones SHAP a continuación deben interpretarse como tendencias direccionales, no verdades absolutas.**")
             
-            sel_malla = st.selectbox("Seleccionar Malla (Pozo) para explicar su FR:", mallas_disp)
+        hover_col = ds.get("hover_name_col", label_col)
+        mallas_disp = df_ml[hover_col].unique()
+        
+        sel_malla = st.selectbox("Seleccionar Malla (Pozo) para explicar su FR:", mallas_disp)
+        
+        idx_array = np.where(df_ml[hover_col] == sel_malla)[0]
+        if len(idx_array) > 0:
+            idx = idx_array[0]
             
-            idx_array = np.where(df_ml[hover_col] == sel_malla)[0]
-            if len(idx_array) > 0:
-                idx = idx_array[0]
+            base_val = explainer.expected_value
+            if isinstance(base_val, np.ndarray):
+                base_val = base_val[0]
+            
+            malla_sv = shap_values[idx]
+            malla_real = df_ml['fr'].iloc[idx]
+            malla_pred = model.predict(df_ml[feat_cols].iloc[idx].values.reshape(1, -1))[0]
+            
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Valor Base (Promedio)", f"{base_val:.3f}")
+            col2.metric("FR Predicho", f"{malla_pred:.3f}")
+            col3.metric("FR Real", f"{malla_real:.3f}", delta=f"{(malla_real - malla_pred):.3f} error", delta_color="inverse")
+            
+            # Ordenar por importancia absoluta
+            sorted_idx = np.argsort(np.abs(malla_sv))
                 
-                base_val = explainer.expected_value
-                if isinstance(base_val, np.ndarray):
-                    base_val = base_val[0]
-                
-                malla_sv = shap_values[idx]
-                malla_real = df_ml['fr'].iloc[idx]
-                malla_pred = model.predict(df_ml[feat_cols].iloc[idx].values.reshape(1, -1))[0]
-                
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Valor Base (Promedio)", f"{base_val:.3f}")
-                col2.metric("FR Predicho", f"{malla_pred:.3f}")
-                col3.metric("FR Real", f"{malla_real:.3f}", delta=f"{(malla_real - malla_pred):.3f} error", delta_color="inverse")
-                
-                # Ordenar por importancia absoluta
-                sorted_idx = np.argsort(np.abs(malla_sv))
-                
-                fig_shap = go.Figure()
-                bar_colors = ["#4ECDC4" if val > 0 else "#FF6B6B" for val in malla_sv[sorted_idx]]
-                
-                fig_shap.add_trace(go.Bar(
-                    y=[feat_cols[i] for i in sorted_idx],
-                    x=malla_sv[sorted_idx],
-                    orientation='h',
-                    marker_color=bar_colors,
-                    text=[f"{malla_sv[i]:.4f}" for i in sorted_idx],
-                    textposition="outside",
-                    hoverinfo="x+y"
-                ))
-                
-                fig_shap.update_layout(
-                    template=PLOTLY_TEMPLATE,
-                    title=f"Impacto SHAP de cada variable en {sel_malla}",
-                    xaxis_title="Impacto en FR (Unidades de FR)",
-                    yaxis_title="Varaible",
-                    height=400,
-                    margin=dict(l=40, r=40, t=40, b=40),
-                )
-                
-                st.plotly_chart(fig_shap, use_container_width=True)
-                st.info(f"💡 **Ayuda**: Las barras hacia la derecha (verde) indican variables que aumentaron el FR respecto al promedio. Las barras hacia la izquierda (rojo) disminuyeron el FR.")
-                
+            fig_shap = go.Figure()
+            bar_colors = ["#4ECDC4" if val > 0 else "#FF6B6B" for val in malla_sv[sorted_idx]]
+            
+            fig_shap.add_trace(go.Bar(
+                y=[feat_cols[i] for i in sorted_idx],
+                x=malla_sv[sorted_idx],
+                orientation='h',
+                marker_color=bar_colors,
+                text=[f"{malla_sv[i]:.4f}" for i in sorted_idx],
+                textposition="outside",
+                hoverinfo="x+y"
+            ))
+            
+            fig_shap.update_layout(
+                template=PLOTLY_TEMPLATE,
+                title=f"Impacto SHAP de cada variable en {sel_malla}",
+                xaxis_title="Impacto en FR (Unidades de FR)",
+                yaxis_title="Varaible",
+                height=400,
+                margin=dict(l=40, r=40, t=40, b=40),
+            )
+            
+            st.plotly_chart(fig_shap, use_container_width=True)
+            st.info(f"💡 **Ayuda**: Las barras hacia la derecha (verde) indican variables que aumentaron el FR respecto al promedio. Las barras hacia la izquierda (rojo) disminuyeron el FR.")
+            
     else:
         st.info("ℹ️ La Optimización de Mallas solo está disponible para el dataset de 'Malla'.")
