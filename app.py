@@ -246,7 +246,7 @@ loadings = pd.DataFrame(
 #  Header + KPIs
 # ══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("# 🔬 Análisis de Componentes Principales (PCA)")
+st.markdown("# 🔬 Análisis de Componentes Principales (PCA) ⚡v1.1")
 st.markdown(f"**Dataset:** {dataset_name}")
 
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
